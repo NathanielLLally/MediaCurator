@@ -29,7 +29,8 @@ All state is stored in a single SQLite database, making runs fully resumable. No
 ### Installation
 
 ```bash
-cd /home/nathaniel/src/imageArchive
+git clone git@github.com:NathanielLLally/MediaCurator.git
+cd MediaCurator
 uv sync  # Install dependencies
 ```
 
