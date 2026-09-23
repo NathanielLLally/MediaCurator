@@ -166,6 +166,3 @@ Weights are stored in `curator/scoring.py` and can be tuned without re-running v
 
 **Claude Code** — Implementation, debugging, and ongoing maintenance ([Anthropic](https://www.anthropic.com/)).
 
----
-
-**License**: This project contains no explicit license. Use as-is for personal archival and curation.
