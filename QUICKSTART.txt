@@ -1,0 +1,219 @@
+═══════════════════════════════════════════════════════════════════════════════
+  IMAGE ARCHIVE CURATOR — QUICK START
+═══════════════════════════════════════════════════════════════════════════════
+
+LOCATION: /home/nathaniel/src/imageArchive
+
+WHAT IT DOES
+─────────────────────────────────────────────────────────────────────────────
+
+Analyzes /mnt/l0pht/media (28 GB archive with 6,950 images in 20 zips)
+Produces:
+  • IMAGE-INDEX.md — human-readable album index with descriptions & scores
+  • PURGE-CANDIDATES.md — low-scoring items (blurry, duplicates, junk)
+  • image-index.csv — flat export for Excel
+
+INSTALLATION (Already Done)
+─────────────────────────────────────────────────────────────────────────────
+
+cd /home/nathaniel/src/imageArchive
+uv sync              # Installs to .venv (takes a few minutes on first run)
+
+CONFIGURE EXTRACTION DIRECTORY (Optional)
+─────────────────────────────────────────────────────────────────────────────
+
+Extraction needs ~15 GB. If your archive drive is small or slow, extract
+elsewhere. Three options:
+
+1. INTERACTIVE SETUP (Recommended for first time)
+   uv run curate /mnt/l0pht/media config
+   → Prompts for extraction directory, saves to curator.json
+
+2. SET DIRECTLY
+   uv run curate /mnt/l0pht/media config --set-extract-dir /mnt/fast-ssd/extracted
+
+3. OVERRIDE PER RUN
+   uv run curate --extract-dir /mnt/backup /mnt/l0pht/media run --all
+
+Priority: CLI flag > config file > default (ARCHIVE/_curator/extracted)
+
+BEFORE RUNNING: READ VERIFICATION.MD
+─────────────────────────────────────────────────────────────────────────────
+
+10-step walkthrough (takes ~1 hour):
+  1. Extract tiny zip → verify paths
+  2. Inventory + hash 16 loose files → verify EXIF/HEIC
+  3. Vision on 20 mixed samples → read captions by hand
+  4. Score + report those 20 → verify scoring makes sense
+  5. Time the sample → project full runtime
+  6. Resumability test → kill & restart DB
+  7-11. Full pipeline prep
+
+This prevents starting an 8-hour overnight run only to discover the VLM
+doesn't work well for your archive.
+
+THEN RUN THE FULL PIPELINE
+─────────────────────────────────────────────────────────────────────────────
+
+cd /home/nathaniel/src/imageArchive
+
+# Full run (8-12 hours, overnight)
+uv run curate /mnt/l0pht/media run --all
+
+# OR with logging for monitoring
+nohup uv run curate /mnt/l0pht/media run --all > run.log 2>&1 &
+
+# Monitor progress
+tail -f run.log
+
+# Can kill and restart anytime — it resumes from the database
+# All output goes to ~/.cache/_curator/, not the archive directory!
+
+# Read the index (written to archive root)
+cat /mnt/l0pht/media/IMAGE-INDEX.md
+
+# Read purge candidates
+cat /mnt/l0pht/media/PURGE-CANDIDATES.md
+
+# Check database location
+ls ~/.local/_curator/          # All databases stored here
+cat ~/.local/_curator/mnt_l0pht_media.db  # This archive's database
+
+# Preview what would be removed (dry-run)
+uv run curate /mnt/l0pht/media quarantine --threshold 25 --dry-run
+
+# Actually move low-scoring items (reversible)
+uv run curate /mnt/l0pht/media quarantine --threshold 25 --execute
+
+# Restore if needed
+uv run curate /mnt/l0pht/media unquarantine
+
+OUTPUT & STORAGE (Nothing in archive directory!)
+─────────────────────────────────────────────────────────────────────────────
+
+All curator files stored in XDG directories:
+
+~/.local/_curator/                           (persistent)
+  ├── mnt_l0pht_media.db                     (database)
+  └── mnt_l0pht_media.json                   (config)
+
+~/.cache/_curator/                           (recreatable)
+  ├── extracted/mnt_l0pht_media/             (unzipped images)
+  └── reports/                               (output files)
+      ├── mnt_l0pht_media_INDEX.md
+      ├── mnt_l0pht_media_index.csv
+      └── mnt_l0pht_media_PURGE-CANDIDATES.md
+
+View results:
+  cat ~/.cache/_curator/reports/mnt_l0pht_media_INDEX.md
+  cat ~/.cache/_curator/reports/mnt_l0pht_media_PURGE-CANDIDATES.md
+
+Clear cache (safe to delete, will regenerate):
+  rm -rf ~/.cache/_curator/extracted/
+
+CONFIGURATION
+─────────────────────────────────────────────────────────────────────────────
+
+Config file: ~/.local/_curator/mnt_l0pht_media.json
+  - Created after first run or config subcommand
+  - Stores extraction directory, thresholds, etc.
+  - (Named by archive path for multi-archive support)
+
+Commands:
+  uv run curate /mnt/l0pht/media config              # Interactive setup
+  uv run curate /mnt/l0pht/media config --show       # Show current config
+  uv run curate /mnt/l0pht/media config --set-extract-dir PATH  # Update
+
+INDIVIDUAL STAGES (for testing/tuning)
+─────────────────────────────────────────────────────────────────────────────
+
+Stages 1-2 (require archive path):
+  uv run curate /mnt/l0pht/media extract        # Unzip archives
+  uv run curate /mnt/l0pht/media inventory      # Extract metadata
+
+Stages 3-7 (archive optional — auto-discovered from ~/.local/_curator/):
+  uv run curate hash                            # SHA256 + perceptual hash
+  uv run curate signals                         # Blur, exposure, resolution
+  uv run curate vision --limit 20               # Test VLM on 20 items
+  uv run curate scoring                         # Compute 0-100 scores
+  uv run curate report                          # Generate Markdown + CSV
+
+  # Or specify archive explicitly:
+  uv run curate /mnt/l0pht/media hash
+  uv run curate /mnt/l0pht/media vision
+
+If multiple archives exist, you'll be prompted to choose one.
+
+KEY FACTS
+─────────────────────────────────────────────────────────────────────────────
+
+✓ Resumable: Each stage checks database; kill/restart safely
+✓ No deletion: Quarantine moves files (reversible); you delete by hand
+✓ Auditable: Every score shows which factors contributed
+✓ Tunable: Edit WEIGHTS in curator/scoring.py, recompute in 1 minute
+✓ Local: qwen2.5vl:7b runs on-machine (no API uploads, no adult-content filters)
+
+DATABASE
+─────────────────────────────────────────────────────────────────────────────
+
+All state in: /mnt/l0pht/media/_curator/curator.db (SQLite)
+Tables:
+  • items — metadata for every image/video
+  • vision — VLM classification output
+  • scores — 0-100 score + component breakdown
+  • stage_state — per-stage completion tracking
+
+To reset a stage and re-run:
+  uv run python << 'EOF'
+  import sqlite3
+  conn = sqlite3.connect("/mnt/l0pht/media/_curator/curator.db")
+  conn.execute("DELETE FROM stage_state WHERE stage = 'vision'")
+  conn.execute("DELETE FROM vision")
+  conn.commit()
+  EOF
+  # Then re-run: uv run curate /mnt/l0pht/media vision
+
+EXPECTED TIMES (RTX 4060, 8 GB VRAM)
+─────────────────────────────────────────────────────────────────────────────
+
+Extract:      2-5 min
+Inventory:    2-3 min
+Hash:         5-10 min
+Signals:      5-10 min
+Vision:       8-12 HOURS (this is the bottleneck; ~4-6 sec per image)
+Scoring:      2-3 min
+Report:       1-2 min
+─────────────────────────────────
+Total:        8-12 HOURS
+
+TROUBLESHOOTING
+─────────────────────────────────────────────────────────────────────────────
+
+Vision model not found?
+  ollama pull qwen2.5vl:7b
+
+Ollama daemon not running?
+  ollama serve
+
+Out of VRAM?
+  • GPU: 6 GB needed for qwen2.5vl:7b; 1.8 GB for moondream
+  • Reduce image downscale in curator/vision.py (currently 896px)
+
+Installation slow?
+  opencv-python-headless is 58 MB, pillow-heif is 5 MB
+  First uv sync can take 5-10 min
+
+Tests hanging?
+  First import of opencv/cv2 is slow on first run
+  timeout might kill it; just let it run
+
+DOCS
+─────────────────────────────────────────────────────────────────────────────
+
+README.md                 — Full usage guide
+VERIFICATION.md           — Step-by-step validation (DO THIS FIRST)
+IMPLEMENTATION_SUMMARY.md — Architecture, design decisions, output format
+
+═══════════════════════════════════════════════════════════════════════════════
+Ready to start? Read VERIFICATION.md first (takes ~1 hour, catches problems early)
+═══════════════════════════════════════════════════════════════════════════════

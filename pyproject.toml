@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "image-archive-curator"
+version = "0.1.0"
+description = "Analyze and curate large image archives with AI classification"
+requires-python = "==3.12.*"
+dependencies = [
+    "pillow==12.3.0",
+    "pillow-heif==1.7.0",
+    "imagehash==4.3.2",
+    "opencv-python-headless==5.0.0.93",
+    "ollama==0.6.2",
+]
+
+[project.scripts]
+curate = "curator.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["curator"]
