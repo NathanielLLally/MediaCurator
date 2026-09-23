@@ -36,6 +36,10 @@ uv sync  # Install dependencies
 
 ### Quick Start
 
+install an image model for ollama if you dont already have one
+I used qwen2.5vl:7b with my CPU fine letting it run on 20gb of 
+movies and pictures overnight
+
 ```bash
 # Full pipeline on archive at /mnt/l0pht/media
 uv run curate /mnt/l0pht/media run --all
